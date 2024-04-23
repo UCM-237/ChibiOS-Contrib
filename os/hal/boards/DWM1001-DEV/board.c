@@ -31,13 +31,13 @@ const PALConfig pal_default_config =
         PAL_MODE_INPUT_PULLUP,        /* P0.2   SW2            */
         PAL_MODE_UNCONNECTED,         /* P0.3                  */
         PAL_MODE_UNCONNECTED,         /* P0.4                  */
-        PAL_MODE_UNCONNECTED,         /* P0.5                  */
+        PAL_MODE_OUTPUT_PUSHPULL,     /* P0.5   UART_TX        */
         PAL_MODE_UNCONNECTED,         /* P0.6                  */
         PAL_MODE_UNCONNECTED,         /* P0.7                  */
         PAL_MODE_UNCONNECTED,         /* P0.8                  */
         PAL_MODE_UNCONNECTED,         /* P0.9                  */
         PAL_MODE_UNCONNECTED,         /* P0.10                 */
-        PAL_MODE_UNCONNECTED,         /* P0.11                 */
+        PAL_MODE_INPUT_PULLUP,        /* P0.11  UART_RX        */
         PAL_MODE_UNCONNECTED,         /* P0.12                 */
         PAL_MODE_UNCONNECTED,         /* P0.13                 */
         PAL_MODE_OUTPUT_PUSHPULL,     /* P0.14  RED_LED_D12    */
@@ -54,8 +54,8 @@ const PALConfig pal_default_config =
         PAL_MODE_UNCONNECTED,         /* P0.25a                */
         PAL_MODE_UNCONNECTED,         /* P0.26a                */
         PAL_MODE_UNCONNECTED,         /* P0.27a                */
-        PAL_MODE_UNCONNECTED,         /* P0.28                 */
-        PAL_MODE_UNCONNECTED,         /* P0.29                 */
+        PAL_MODE_OUTPUT_OPENDRAIN,    /* P0.28  I2C_SCL        */
+        PAL_MODE_OUTPUT_OPENDRAIN,    /* P0.29  I2C_SDA        */
         PAL_MODE_OUTPUT_PUSHPULL,     /* P0.30  GREEN_LED_D9   */
         PAL_MODE_OUTPUT_PUSHPULL,     /* P0.31  BLUE_LED_D10   */
   },

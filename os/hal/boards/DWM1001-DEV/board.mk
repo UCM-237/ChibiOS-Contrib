@@ -1,8 +1,8 @@
 # List of all the board related files.
-BOARDSRC = ${CHIBIOS_CONTRIB}/os/hal/boards/NRF52-DWM1001/board.c
+BOARDSRC = ${CHIBIOS_CONTRIB}/os/hal/boards/DWM1001-DEV/board.c
 
 # Required include directories
-BOARDINC = ${CHIBIOS_CONTRIB}/os/hal/boards/NRF52-DWM1001
+BOARDINC = ${CHIBIOS_CONTRIB}/os/hal/boards/DWM1001-DEV
 
 # Flash
 JLINK_DEVICE    = nrf52
