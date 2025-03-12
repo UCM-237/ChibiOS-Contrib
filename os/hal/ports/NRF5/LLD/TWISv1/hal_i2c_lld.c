@@ -15,7 +15,7 @@
 */
 
 /**
- * @file    NRF5/NRF52832/hal_i2c_lld.c
+ * @file    NRF5/LLD/TWISv1/hal_i2c_lld.c
  * @brief   NRF52 I2C subsystem low level driver source with slave implementation.
  *
  * @addtogroup I2C
@@ -31,12 +31,6 @@
 /*===========================================================================*/
 /* Driver local definitions.                                                 */
 /*===========================================================================*/
-
-/* These macros are needed to see if the slave is stuck and we as master send dummy clock cycles to end its wait */
-#define I2C_HIGH(p)   do { IOPORT1->OUTSET = (1UL << (p)); } while(0)   /*!< Pulls I2C line high */
-#define I2C_LOW(p)    do { IOPORT1->OUTCLR = (1UL << (p)); } while(0)   /*!< Pulls I2C line low  */
-#define I2C_INPUT(p)  do { IOPORT1->DIRCLR = (1UL << (p)); } while(0)   /*!< Configures I2C pin as input  */
-#define I2C_OUTPUT(p) do { IOPORT1->DIRSET = (1UL << (p)); } while(0)   /*!< Configures I2C pin as output */
 
 #define I2C_PIN_CNF(internal_pullup) \
       ((GPIO_PIN_CNF_SENSE_Disabled  << GPIO_PIN_CNF_SENSE_Pos) \
@@ -83,6 +77,11 @@ I2CDriver I2CD2;
 /* Driver local variables and types.                                         */
 /*===========================================================================*/
 
+static uint8_t* nrf52_i2cs_txbuf = NULL;
+static uint8_t* nrf52_i2cs_rxbuf = NULL;
+static size_t nrf52_i2cs_txbytes = 0;
+static size_t nrf52_i2cs_rxbytes = 0;
+
 /*===========================================================================*/
 /* Driver local functions.                                                   */
 /*===========================================================================*/
@@ -99,9 +98,11 @@ __attribute__((noinline))
  * @param[in] i2cp         pointer to an I2CDriver
  */
 static void i2c_serve_interrupt(I2CDriver *i2cp) {
-  NRF_TWIM_Type *i2c = i2cp->i2c;
+  NRF_TWIS_Type *i2c = i2cp->i2c;
 
-  if (i2c->EVENTS_ERROR) {
+  // TODO
+  if (i2c->EVENTS_ERROR) 
+  {
     uint32_t err = i2c->ERRORSRC;
     i2c->EVENTS_ERROR = 0;
     (void)i2c->EVENTS_ERROR;
@@ -114,12 +115,39 @@ static void i2c_serve_interrupt(I2CDriver *i2cp) {
     i2c->TASKS_STOP = 1;
 
     _i2c_wakeup_error_isr(i2cp);
-  } else if(i2c->EVENTS_STOPPED) {
-
+  } 
+  else if(i2c->EVENTS_STOPPED) 
+  {
     i2c->EVENTS_STOPPED = 0;
     (void)i2c->EVENTS_STOPPED;
 
     _i2c_wakeup_isr(i2cp);
+  }
+  else if (i2c->EVENTS_READ) 
+  {
+    // Read from slave
+    if (nrf52_i2cs_txbuf != NULL && nrf52_i2cs_txbytes > 0)
+    {
+      i2c->TXD.PTR = (uint32_t)nrf52_i2cs_txbuf;
+      i2c->TXD.MAXCNT = nrf52_i2cs_txbytes;
+      
+      i2c->TASKS_PREPARETX = 1;
+    
+      _i2c_wakeup_isr(i2cp);
+    }
+  }
+  else if (i2c->EVENTS_WRITE) 
+  {
+    if (nrf52_i2cs_rxbuf != NULL && nrf52_i2cs_rxbytes > 0)
+    {
+      // Write to slave
+      i2c->TXD.PTR = (uint32_t)nrf52_i2cs_rxbuf;
+      i2c->TXD.MAXCNT = nrf52_i2cs_rxbytes;
+      
+      i2c->TASKS_PREPARERX = 1;
+
+      _i2c_wakeup_isr(i2cp);
+    }
   }
 }
 
@@ -163,13 +191,13 @@ void i2c_lld_init(void) {
 #if NRF5_I2C_USE_I2C0
   i2cObjectInit(&I2CD1);
   I2CD1.thread = NULL;
-  I2CD1.i2c = NRF_TWIM0;
+  I2CD1.i2c = NRF_TWIS0;
 #endif
 
 #if NRF5_I2C_USE_I2C1
   i2cObjectInit(&I2CD2);
   I2CD2.thread = NULL;
-  I2CD2.i2c = NRF_TWIM1;
+  I2CD2.i2c = NRF_TWIS1;
 #endif
 
 }
@@ -182,7 +210,7 @@ void i2c_lld_init(void) {
  * @notapi
  */
 void i2c_lld_start(I2CDriver *i2cp) {
-  NRF_TWIM_Type *i2c = i2cp->i2c;
+  NRF_TWIS_Type *i2c = i2cp->i2c;
 
   const I2CConfig *cfg = i2cp->config;
 
@@ -190,8 +218,6 @@ void i2c_lld_start(I2CDriver *i2cp) {
     return;
 
   osalDbgAssert(i2c->ENABLE == 0, "already in use");
-
-  i2c_clear_bus(i2cp);
 
   IOPORT1->PIN_CNF[cfg->scl_pad] = I2C_PIN_CNF(cfg->scl_pullup);
   IOPORT1->PIN_CNF[cfg->sda_pad] = I2C_PIN_CNF(cfg->sda_pullup);
@@ -205,21 +231,6 @@ void i2c_lld_start(I2CDriver *i2cp) {
 
   i2c->PSEL.SCL = cfg->scl_pad;
   i2c->PSEL.SDA = cfg->sda_pad;
-  
-  switch (cfg->clock) {
-    case 100000:
-      i2c->FREQUENCY = TWIM_FREQUENCY_FREQUENCY_K100 << TWIM_FREQUENCY_FREQUENCY_Pos;
-      break;
-    case 250000:
-      i2c->FREQUENCY = TWIM_FREQUENCY_FREQUENCY_K250 << TWIM_FREQUENCY_FREQUENCY_Pos;
-      break;
-    case 400000:
-      i2c->FREQUENCY = TWIM_FREQUENCY_FREQUENCY_K400 << TWIM_FREQUENCY_FREQUENCY_Pos;
-      break;
-    default:
-      osalDbgAssert(0, "invalid I2C frequency");
-      break;
-  };
 
 #if NRF5_I2C_USE_I2C0
   nvicEnableVector(I2C0_IRQ_NUM, I2C0_IRQ_PRI);
@@ -229,9 +240,9 @@ void i2c_lld_start(I2CDriver *i2cp) {
   nvicEnableVector(I2C1_IRQ_NUM, I2C1_IRQ_PRI);
 #endif
 
-  i2c->INTENSET = TWIM_INTENSET_STOPPED_Msk | TWIM_INTENSET_ERROR_Msk;
+  i2c->INTENSET = TWIS_INTENSET_STOPPED_Msk | TWIS_INTENSET_ERROR_Msk | TWIS_INTENSET_READ_Msk | TWIS_INTENSET_WRITE_Msk;
 
-  i2c->ENABLE = TWIM_ENABLE_ENABLE_Enabled << TWIM_ENABLE_ENABLE_Pos;
+  i2c->ENABLE = TWIS_ENABLE_ENABLE_Enabled << TWIS_ENABLE_ENABLE_Pos;
 }
 
 /**
@@ -242,13 +253,13 @@ void i2c_lld_start(I2CDriver *i2cp) {
  * @notapi
  */
 void i2c_lld_stop(I2CDriver *i2cp) {
-  NRF_TWIM_Type *i2c = i2cp->i2c;
+  NRF_TWIS_Type *i2c = i2cp->i2c;
   const I2CConfig *cfg = i2cp->config;
 
   if (i2cp->state != I2C_STOP) {
 	i2c->SHORTS = 0;
 
-    i2c->INTENCLR = TWIM_INTENCLR_STOPPED_Msk | TWIM_INTENCLR_ERROR_Msk;
+    i2c->INTENCLR = TWIS_INTENCLR_STOPPED_Msk | TWIS_INTENCLR_ERROR_Msk | TWIS_INTENCLR_READ_Msk | TWIS_INTENCLR_WRITE_Msk;
 
 #if NRF5_I2C_USE_I2C0
     nvicDisableVector(I2C0_IRQ_NUM);
@@ -258,63 +269,38 @@ void i2c_lld_stop(I2CDriver *i2cp) {
     nvicDisableVector(I2C1_IRQ_NUM);
 #endif
 
-    i2c->ENABLE = TWIM_ENABLE_ENABLE_Disabled << TWIM_ENABLE_ENABLE_Pos;
+    i2c->ENABLE = TWIS_ENABLE_ENABLE_Disabled << TWIS_ENABLE_ENABLE_Pos;
 
     IOPORT1->PIN_CNF[cfg->scl_pad] = I2C_PIN_CNF_CLR(cfg->scl_pullup);
     IOPORT1->PIN_CNF[cfg->sda_pad] = I2C_PIN_CNF_CLR(cfg->sda_pullup);
   }
 }
 
-static inline msg_t _i2c_txrx_timeout(I2CDriver *i2cp, i2caddr_t addr,
-                                      const uint8_t *txbuf, size_t txbytes,
-                                      uint8_t *rxbuf, size_t rxbytes,
-                                      systime_t timeout) {
+void i2c_lld_slave_handler_set(I2CDriver *i2cp,
+	uint8_t *txbuf, size_t txbytes,
+	uint8_t *rxbuf, size_t rxbytes) {
 
-  NRF_TWIM_Type *i2c = i2cp->i2c;
-  msg_t msg;
-
-  i2cp->errors = I2C_NO_ERROR;
-  i2cp->addr = addr;
-
-  uint8_t tx_bytes = txbytes;
-  uint8_t rx_bytes = rxbytes;
-
-  i2cp->i2c->SHORTS = 0;
-  i2c->ADDRESS = addr;
-
-  if (tx_bytes && rx_bytes) {
-	i2c->TXD.PTR = (uint32_t)txbuf;
-	i2c->TXD.MAXCNT = tx_bytes;
-	i2c->TXD.LIST = TWIM_TXD_LIST_LIST_ArrayList << TWIM_TXD_LIST_LIST_Pos;
-	i2c->RXD.PTR = (uint32_t)rxbuf;
-	i2c->RXD.MAXCNT = rx_bytes;
-	i2c->RXD.LIST = TWIM_RXD_LIST_LIST_ArrayList << TWIM_RXD_LIST_LIST_Pos;
-    i2cp->i2c->SHORTS = TWIM_SHORTS_LASTTX_STARTRX_Enabled << TWIM_SHORTS_LASTTX_STARTRX_Pos |
-    					TWIM_SHORTS_LASTRX_STOP_Enabled << TWIM_SHORTS_LASTRX_STOP_Pos;
-    i2c->TASKS_STARTTX = 1;
-  } else if (tx_bytes && !rx_bytes) {
-	i2c->TXD.PTR = (uint32_t)txbuf;
-	i2c->TXD.MAXCNT = tx_bytes;
-	i2c->TXD.LIST = TWIM_TXD_LIST_LIST_ArrayList << TWIM_TXD_LIST_LIST_Pos;
-    i2cp->i2c->SHORTS = TWIM_SHORTS_LASTTX_STOP_Enabled << TWIM_SHORTS_LASTTX_STOP_Pos;
-    i2c->TASKS_STARTTX = 1;
-  } else if (!tx_bytes && rx_bytes) {
-	i2c->RXD.PTR = (uint32_t)rxbuf;
-	i2c->RXD.MAXCNT = rx_bytes;
-	i2c->RXD.LIST = TWIM_RXD_LIST_LIST_ArrayList << TWIM_RXD_LIST_LIST_Pos;
-    i2cp->i2c->SHORTS = TWIM_SHORTS_LASTRX_STOP_Enabled << TWIM_SHORTS_LASTRX_STOP_Pos;
-    i2c->TASKS_STARTRX = 1;
-  } else {
-    osalDbgAssert(0, "no bytes to transfer");
-  }
-
-  msg = osalThreadSuspendTimeoutS(&i2cp->thread, timeout);
-
-  if (msg == MSG_TIMEOUT)
-    i2c->TASKS_STOP = 1;
-
-  return msg;
+  nrf52_i2cs_txbuf = txbuf;
+  nrf52_i2cs_rxbuf = rxbuf;
+  nrf52_i2cs_txbytes = txbytes;
+  nrf52_i2cs_rxbytes = rxbytes;
 }
+
+/**
+ * @brief   Listen I2C bus for address match.
+ * @details Use 7 bit address
+ *
+ * @param[in] i2cp      pointer to the @p I2CDriver object
+ * @param[in] addr      slave device address
+ *
+ * @notapi
+ */
+void i2c_lld_set_addr0(I2CDriver *i2cp, i2caddr_t addr) {
+
+  NRF_TWIS_Type *i2c = i2cp->i2c;
+  i2c->ADDRESS[0] = addr;
+}
+
 
 /**
  * @brief   Receives data via the I2C bus as master.
@@ -338,142 +324,43 @@ static inline msg_t _i2c_txrx_timeout(I2CDriver *i2cp, i2caddr_t addr,
  * @notapi
  */
 msg_t i2c_lld_master_receive_timeout(I2CDriver *i2cp, i2caddr_t addr,
-                                     uint8_t *rxbuf, size_t rxbytes,
-                                     systime_t timeout) {
+	uint8_t *rxbuf, size_t rxbytes,
+	systime_t timeout) {
 
-  return _i2c_txrx_timeout(i2cp, addr, NULL, 0, rxbuf, rxbytes, timeout);
+	return MSG_RESET;
 }
 
 /**
- * @brief   Transmits data via the I2C bus as master.
- *
- * @param[in] i2cp      pointer to the @p I2CDriver object
- * @param[in] addr      slave device address
- * @param[in] txbuf     pointer to the transmit buffer
- * @param[in] txbytes   number of bytes to be transmitted
- * @param[out] rxbuf    pointer to the receive buffer
- * @param[in] rxbytes   number of bytes to be received
- * @param[in] timeout   the number of ticks before the operation timeouts,
- *                      the following special values are allowed:
- *                      - @a TIME_INFINITE no timeout.
- *                      .
- * @return              The operation status.
- * @retval MSG_OK       if the function succeeded.
- * @retval MSG_RESET    if one or more I2C errors occurred, the errors can
- *                      be retrieved using @p i2cGetErrors().
- * @retval MSG_TIMEOUT  if a timeout occurred before operation end. <b>After a
- *                      timeout the driver must be stopped and restarted
- *                      because the bus is in an uncertain state</b>.
- *
- * @notapi
- */
+* @brief   Transmits data via the I2C bus as master.
+*
+* @param[in] i2cp      pointer to the @p I2CDriver object
+* @param[in] addr      slave device address
+* @param[in] txbuf     pointer to the transmit buffer
+* @param[in] txbytes   number of bytes to be transmitted
+* @param[out] rxbuf    pointer to the receive buffer
+* @param[in] rxbytes   number of bytes to be received
+* @param[in] timeout   the number of ticks before the operation timeouts,
+*                      the following special values are allowed:
+*                      - @a TIME_INFINITE no timeout.
+*                      .
+* @return              The operation status.
+* @retval MSG_OK       if the function succeeded.
+* @retval MSG_RESET    if one or more I2C errors occurred, the errors can
+*                      be retrieved using @p i2cGetErrors().
+* @retval MSG_TIMEOUT  if a timeout occurred before operation end. <b>After a
+*                      timeout the driver must be stopped and restarted
+*                      because the bus is in an uncertain state</b>.
+*
+* @notapi
+*/
 msg_t i2c_lld_master_transmit_timeout(I2CDriver *i2cp, i2caddr_t addr,
-                                      const uint8_t *txbuf, size_t txbytes,
-                                      uint8_t *rxbuf, size_t rxbytes,
-                                      systime_t timeout) {
+	 const uint8_t *txbuf, size_t txbytes,
+	 uint8_t *rxbuf, size_t rxbytes,
+	 systime_t timeout) {
 
-  return _i2c_txrx_timeout(i2cp, addr, txbuf, txbytes, rxbuf, rxbytes, timeout);
+	return MSG_RESET;
 }
 
-#if (I2C_SUPPORTS_SLAVE_MODE == TRUE) || defined(__DOXYGEN__)
-/**
- * @brief   Receive data via the I2C bus as slave and call handler.
- *
- * @param[in] i2cp      pointer to the @p I2CDriver object
- * @param[out] rxbuf    pointer to the receive buffer
- * @param[in] rxbytes   size of receive buffer
- * @param[in] timeout   the number of ticks before the operation timeouts,
- *                      the following special values are allowed:
- *                      - @a TIME_INFINITE no timeout.
- *                      .
- * @return              The operation status.
- * @retval MSG_OK       if the function succeeded.
- * @retval MSG_RESET    if one or more I2C errors occurred, the errors can
- *                      be retrieved using @p i2cGetErrors().
- * @retval MSG_TIMEOUT  if a timeout occurred before operation end. <b>After a
- *                      timeout the driver must be stopped and restarted
- *                      because the bus is in an uncertain state</b>.
- *
- * @api
- */
-msg_t i2c_lld_slave_receive_timeout(I2CDriver *i2cp,
-                             uint8_t *rxbuf,
-                             size_t rxbytes,
-                             sysinterval_t timeout) {
-  I2C_TypeDef *dp = i2cp->i2c;
-  msg_t msg;
-
-  /* Resetting error flags for this transfer.*/
-  i2cp->errors = I2C_NO_ERROR;
-
-  /* Get the buffer from the peripheral */
-  rxbuf = i2cp->rx_buffer;
-  rxbytes = i2cp->rx_len;
-  i2cp->count = 0;
-
-  /* Starts the operation.*/
-  dp->CTRL_b.STA = true;
-
-  /* Waits for the operation completion or a timeout.*/
-  msg = osalThreadSuspendTimeoutS(&i2cp->thread, timeout);
-  if (msg != MSG_OK) {
-    i2cp->rx_buffer = NULL;
-    i2cp->rx_len = 0;
-  }
-
-  return msg;
-}
-
-/**
- * @brief   Transmits data via the I2C bus as slave.
- * @details Call this function when Master request data (in request handler)
- *
- * @param[in] i2cp      pointer to the @p I2CDriver object
- * @param[in] txbuf     pointer to the transmit buffer
- * @param[in] txbytes   number of bytes to be transmitted
- * @param[in] timeout   the number of ticks before the operation timeouts,
- *                      the following special values are allowed:
- *                      - @a TIME_INFINITE no timeout.
- *                      .
- * @return              The operation status.
- * @retval MSG_OK       if the function succeeded.
- * @retval MSG_RESET    if one or more I2C errors occurred, the errors can
- *                      be retrieved using @p i2cGetErrors().
- * @retval MSG_TIMEOUT  if a timeout occurred before operation end. <b>After a
- *                      timeout the driver must be stopped and restarted
- *                      because the bus is in an uncertain state</b>.
- *
- * @api
- */
-msg_t i2c_lld_slave_transmit_timeout(I2CDriver *i2cp,
-                               const uint8_t *txbuf,
-                               size_t txbytes,
-                               sysinterval_t timeout) {
-  I2C_TypeDef *dp = i2cp->i2c;
-  msg_t msg;
-
-  /* Resetting error flags for this transfer.*/
-  i2cp->errors = I2C_NO_ERROR;
-
-  /* Pass the buffer to the peripheral */
-  i2cp->tx_buffer = txbuf;
-  i2cp->tx_len = txbytes;
-  i2cp->count = 0;
-
-  /* Starts the operation.*/
-  dp->CTRL_b.STA = true;
-
-  /* Waits for the operation completion or a timeout.*/
-  msg = osalThreadSuspendTimeoutS(&i2cp->thread, timeout);
-
-  if (msg != MSG_OK) {
-    i2cp->tx_buffer = NULL;
-    i2cp->tx_len = 0;
-  }
-
-  return msg;
-}
-#endif /* I2C_SUPPORTS_SLAVE_MODE == TRUE */
 #endif /* HAL_USE_I2C */
 
 /** @} */

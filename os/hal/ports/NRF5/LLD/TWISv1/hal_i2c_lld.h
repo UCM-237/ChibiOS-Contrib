@@ -15,8 +15,8 @@
 */
 
 /**
- * @file    NRF5/NRF52832/hal_i2c_lld.h
- * @brief   NRF52 I2C subsystem low level driver header.
+ * @file    NRF5/LLD/TWISv1/hal_i2c_lld.h
+ * @brief   NRF52 I2C slave subsystem low level driver header.
  *
  * @addtogroup I2C
  * @{
@@ -158,7 +158,7 @@ struct I2CDriver {
   /* End of the mandatory fields.*/
 
   /* @brief Low-level register access. */
-  NRF_TWIM_Type             *i2c;
+  NRF_TWIS_Type             *i2c;
 };
 
 /*===========================================================================*/
@@ -196,13 +196,17 @@ extern "C" {
   void i2c_lld_init(void);
   void i2c_lld_start(I2CDriver *i2cp);
   void i2c_lld_stop(I2CDriver *i2cp);
-  msg_t i2c_lld_slave_transmit_timeout(I2CDriver *i2cp, i2caddr_t addr,
+  void i2c_lld_set_addr0(I2CDriver *i2cp, i2caddr_t addr);
+  void i2c_lld_slave_handler_set(I2CDriver *i2cp,
+                                        uint8_t *txbuf, size_t txbytes,
+                                        uint8_t *rxbuf, size_t rxbytes);
+  msg_t i2c_lld_master_transmit_timeout(I2CDriver *i2cp, i2caddr_t addr,
                                         const uint8_t *txbuf, size_t txbytes,
                                         uint8_t *rxbuf, size_t rxbytes,
                                         systime_t timeout);
-  msg_t i2c_lld_slave_receive_timeout(I2CDriver *i2cp, i2caddr_t addr,
-                                       uint8_t *rxbuf, size_t rxbytes,
-                                       systime_t timeout);
+  msg_t i2c_lld_master_receive_timeout(I2CDriver *i2cp, i2caddr_t addr,
+                                      uint8_t *rxbuf, size_t rxbytes,
+                                      systime_t timeout);
 #ifdef __cplusplus
 }
 #endif
