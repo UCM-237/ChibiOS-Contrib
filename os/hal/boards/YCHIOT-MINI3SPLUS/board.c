@@ -46,4 +46,18 @@ void __early_init(void) {
  * Board-specific initialization code.
  */
 void boardInit(void) {
+//   /* Initialize DW1000 reset pin to high (not in reset) */
+//   palSetPad(GPIOA, GPIOA_DW_RSTn);
+  
+//   /* Initialize DW1000 wakeup pin to low (normal operation) */
+//   palClearPad(GPIOB, GPIOB_DW_WUP);
+  
+//   /* Initialize DW1000 chip select to high (not selected) */
+//   palSetPad(GPIOA, GPIOA_DW_NSS);
+  
+  /* Initialize LED to off state */
+//   palSetPad(GPIOB, GPIOB_LED1);
+  
+//   /* Initialize USB enable pin */
+//   palSetPad(GPIOA, GPIOA_USB_EN);
 }

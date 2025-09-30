@@ -18,15 +18,15 @@
 #define _BOARD_H_
 
 /*
- * Setup for the STM32F103C8T6 Module often described as "Arduino"-like
- * on eBay, typically marked "www.vcc-gnd.com".
+ * Setup for the UWB Mini3sPlus Module with STM32F103T8U6
+ * Based on YCHIOT UWB Mini3sPlus datasheet
  */
 
 /*
  * Board identifier.
  */
-#define BOARD_MINIMAL_STM32_F103
-#define BOARD_NAME              "STM32F103 Minimal Module"
+#define BOARD_UWB_MINI3SPLUS
+#define BOARD_NAME              "UWB Mini3sPlus Module"
 
 /*
  * Board frequencies.
@@ -36,7 +36,7 @@
 
 /*
  * MCU type, supported types are defined in ./os/hal/platforms/hal_lld.h.
- *
+ * STM32F103T8U6 is a 64KB Flash variant
  * Only xB (128KB Flash) is defined, but it's identical to the
  * x8 version (64KB Flash) except for the Flash region size in the
  * linker script. For x8 parts use xB here and change to the x8 linker
@@ -45,21 +45,29 @@
 #define STM32F103xB
 
 /*
- * IO pins assignments
- *
- * numbering is sorted by onboard/connectors, as from the schematics in
- * http://www.vcc-gnd.com/read.php?tid=369
+ * IO pins assignments for UWB Mini3sPlus
+ * Based on the datasheet IO allocation table
  */
 
-/* on-board */
+/* DW1000 UWB chip connections */
+#define GPIOA_DW_RSTn           0       // DW1000 reset
+#define GPIOA_USB_EN            3       // USB enable
+#define GPIOA_DW_NSS            4       // DW1000 SPI NSS
+#define GPIOA_DW_SCK            5       // DW1000 SPI SCK
+#define GPIOA_DW_MISO           6       // DW1000 SPI MISO
+#define GPIOA_DW_MOSI           7       // DW1000 SPI MOSI
+#define GPIOA_DW_EXTON          8       // DW1000 external clock
+#define GPIOA_USART1_TX         9       // USART1 TX
+#define GPIOA_USART1_RX         10      // USART1 RX
+#define GPIOA_USBDM             11      // USB D-
+#define GPIOA_USBDP             12      // USB D+
+#define GPIOA_SWDIO             13      // SWD interface
+#define GPIOA_SWCLK             14      // SWD interface
 
-#define GPIOC_LED               13
-
-#define GPIOA_USBDM             11      // pin 8
-#define GPIOA_USBDP             12      // pin 9
-
-#define GPIOC_OSC32_IN          14
-#define GPIOC_OSC32_OUT         15
+#define GPIOB_DW_WUP            0       // DW1000 wakeup
+#define GPIOB_BOOT1             2       // Boot1 pin
+#define GPIOB_DW_IRQN           5       // DW1000 interrupt
+#define GPIOB_LED1              6       // LED1 (controllable)
 
 
 /*
@@ -88,27 +96,49 @@
 
 /*
  * Port A setup.
- * Everything input with pull-up except:
+ * PA0  - DW_RSTn (output push-pull 2MHz)
+ * PA1  - Input with pull-up
+ * PA2  - Input with pull-up  
+ * PA3  - USB_EN (output push-pull 2MHz)
+ * PA4  - DW_NSS (output push-pull 50MHz)
+ * PA5  - DW_SCK (alternate push-pull 50MHz)
+ * PA6  - DW_MISO (Digital input with PullUp or PullDown resistor)
+ * PA7  - DW_MOSI (alternate push-pull 50MHz)
+ * PA8  - DW_EXTON (output push-pull 2MHz)
+ * PA9  - USART1_TX (alternate push-pull 50MHz)
+ * PA10 - USART1_RX (input with pull-up)
+ * PA11 - USB_DM (input with pull-up)
+ * PA12 - USB_DP (input with pull-up)
+ * PA13 - SWDIO (input with pull-up)
+ * PA14 - SWCLK (input with pull-up)
+ * PA15 - Input with pull-up
  */
-#define VAL_GPIOACRL            0x88888888      /*  PA7...PA0 */
-#define VAL_GPIOACRH            0x88888888      /* PA15...PA8 */
+#define VAL_GPIOACRL            0xB4B38833      /*  PA7...PA0 */
+#define VAL_GPIOACRH            0x888888B8      /* PA15...PA8 */
 #define VAL_GPIOAODR            0xFFFFFFFF
 
 /*
  * Port B setup.
- * Everything input with pull-up except:
+ * PB0  - DW_WUP (output push-pull 2MHz)
+ * PB1  - Input with pull-up
+ * PB2  - BOOT1 (input with pull-up)
+ * PB3  - Input with pull-up
+ * PB4  - Input with pull-up
+ * PB5  - DW_IRQN (input with pull-up)
+ * PB6  - LED1 (output push-pull 2MHz)
+ * PB7  - Input with pull-up
+ * PB8-PB15 - Input with pull-up
  */
-#define VAL_GPIOBCRL            0x88888888      /*  PB7...PB0 */
+#define VAL_GPIOBCRL            0x82888882      /*  PB7...PB0 */
 #define VAL_GPIOBCRH            0x88888888      /* PB15...PB8 */
 #define VAL_GPIOBODR            0xFFFFFFFF
 
 /*
  * Port C setup.
  * Everything input with pull-up except:
- * PC13 - Digital output (LED).
  */
 #define VAL_GPIOCCRL            0x88888888      /*  PC7...PC0 */
-#define VAL_GPIOCCRH            0x88388888      /* PC15...PC8 */
+#define VAL_GPIOCCRH            0x88888888      /* PC15...PC8 */
 #define VAL_GPIOCODR            0xFFFFFFFF
 
 /*
