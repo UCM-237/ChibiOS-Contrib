@@ -51,8 +51,8 @@
 #define SPI_SS           17U
 #define UART_TX			  5U
 #define UART_RX          11U
-#define I2C_SCL          28U
-#define I2C_SDA          29U
+#define I2C_SCL           8U
+#define I2C_SDA          15U
 
 
 /*
@@ -73,8 +73,8 @@
 #define IOPORT1_SPI_SS         17U
 #define IOPORT1_UART_TX         5U
 #define IOPORT1_UART_RX        11U
-#define IOPORT1_I2C_SCL        28U
-#define IOPORT1_I2C_SDA        29U
+#define IOPORT1_I2C_SCL         8U
+#define IOPORT1_I2C_SDA        15U
 
 /*
  * IO lines assignments.

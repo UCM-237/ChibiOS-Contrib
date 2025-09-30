@@ -24,7 +24,13 @@ include ${CHIBIOS_CONTRIB}/os/hal/ports/NRF5/LLD/GPIOv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/NRF5/LLD/UARTv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/NRF5/LLD/UARTEv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/NRF5/LLD/SPIv1/driver.mk
+
+ifneq ($(findstring NRF52_I2C_SLAVE TRUE,$(HALCONF)),)
+include ${CHIBIOS_CONTRIB}/os/hal/ports/NRF5/LLD/TWISv1/driver.mk
+else
 include ${CHIBIOS_CONTRIB}/os/hal/ports/NRF5/LLD/TWIMv1/driver.mk
+endif
+
 include ${CHIBIOS_CONTRIB}/os/hal/ports/NRF5/LLD/PWMv2/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/NRF5/LLD/TIMERv1/driver.mk
 include ${CHIBIOS_CONTRIB}/os/hal/ports/NRF5/LLD/WDTv1/driver.mk
