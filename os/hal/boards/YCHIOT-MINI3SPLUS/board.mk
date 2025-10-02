@@ -1,8 +1,8 @@
 # List of all the board related files.
-BOARDSRC = ${CHIBIOS}/os/hal/boards/YCHIOT-MINI3SPLUS/board.c
+BOARDSRC = ${CHIBIOS_CONTRIB}/os/hal/boards/YCHIOT-MINI3SPLUS/board.c
 
 # Required include directories
-BOARDINC = ${CHIBIOS}/os/hal/boards/YCHIOT-MINI3SPLUS
+BOARDINC = ${CHIBIOS_CONTRIB}/os/hal/boards/YCHIOT-MINI3SPLUS
 
 # Shared variables
 ALLCSRC += $(BOARDSRC)
